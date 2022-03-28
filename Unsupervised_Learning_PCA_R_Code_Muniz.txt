@@ -1,0 +1,156 @@
+#Installing and loading the necessary libraries for the analysis
+install.packages(c("survey","knitr"))
+library(foreign)
+library(survey)
+library(knitr)
+library(tidyverse)
+library(Rtsne)
+library(psych)
+library(lessR)
+#Loading the pew survey data
+pewdata = read.spss("Mar19public.sav", use.value.labels = TRUE,
+                    to.data.frame = TRUE)
+table(pewdata$q1)
+head(pewdata)
+print(str(pewdata)) 
+
+# check on column indices for political opinion variables
+print(names(pewdata)[26]) # this is q1
+print(names(pewdata)[98]) # this is q77f2
+
+# identifying the variables relating to political opinion
+pewopinion = pewdata[,26:98] # covers q1 to q77f2
+head(pewopinion)
+
+# a quick check shows there are no complete cases across all opinion items
+ok = complete.cases(pewopinion)
+cat("\nNumber of original cases with complete data:", sum(ok))
+cat("\nNumber of original cases with incomplete data:", sum(!ok))
+
+# see if there is a subset of opinion items with complete data
+item_complete = c() # initialize list of names of items
+for (item in seq(along = names(pewopinion))) {
+  if (sum(complete.cases(pewopinion[,item])) == nrow(pewopinion))
+    item_complete = c(item_complete, names(pewopinion)[item])
+}
+cat("\n\nNumber of items with complete data:",length(item_complete)) 
+
+# variable names for items with complete data
+cat("\nNames of items with complete data:\n", item_complete)
+
+pewwork = pewopinion[,item_complete]
+head(pewwork)
+print(str(pewwork))
+      
+design_string = paste("~ q1 + q2 + q19 + q20 + q25 + q47 + q50a + q50b +", 
+                      "q50c + q50d + q50e + q58 + q60 + q61a + q61b +", 
+                      "q61c + q64 + q65a + q65b + q65c + q65d + q65e +", 
+                      "q66 + q68a + q68b + q68d + q69 + q70 + q71 + q75")
+
+# fast way to create binary indicator variables for all items with complete data
+# this converts the 30 multi-category items into 100 binary indictor variables
+pewmat = model.matrix(formula(design_string), data = pewwork)
+print(str(pewmat))
+head(pewmat)
+pewdf = as.data.frame(pewmat)
+print(str(pewdf))
+head(pewdf)
+#EDA
+head(pewdf)
+head(pewmat)
+
+#Ensuring all question option have data
+table(pewwork$q1)
+table(pewwork$q2)
+table(pewwork$q19)
+table(pewwork$q20)
+table(pewwork$q25)
+table(pewwork$q47)
+table(pewwork$q50a)
+table(pewwork$q50b)
+table(pewwork$q50c)
+table(pewwork$q50d)
+table(pewwork$q50e)
+table(pewwork$q58)
+table(pewwork$q60)
+table(pewwork$q61a)
+table(pewwork$q61b)
+table(pewwork$q61c)
+table(pewwork$q64)
+table(pewwork$q65a)
+table(pewwork$q65b)
+table(pewwork$q65c)
+table(pewwork$q65d)
+table(pewwork$q65e)
+table(pewwork$q66)
+table(pewwork$q68a)
+table(pewwork$q68b)
+table(pewwork$q68d)
+#Other/Depends has a count of 0 for q69
+table(pewwork$q69)
+table(pewwork$q70)
+table(pewwork$q71)
+table(pewwork$q75)
+
+#remove q69(Vol) Other/Depends from pewdf
+drops <- c("q69(VOL) Other/Depends")
+pewdf_clean <- pewdf[ , !(names(pewdf) %in% drops)]
+head(pewdf_clean)
+
+
+# fast way to create binary indicator variables for all items with complete data
+# this converts the 30 multi-category items into 100 binary indictor variables
+poli_mat = model.matrix(formula(political_questions), data = pewwork)
+print(str(pewmat))
+
+
+#Correlation matrix is created using new cleaned dataframe
+corr.matrix <- cor(pewdf_clean[0.-1])
+corr.matrix
+
+#Parallel analysis and scree plot are conducted and created leveraging the cleaned dataframe and correlation matrix
+fa.parallel(pewdf_clean[,-1],fa="both",n.iter=1503,show.legend=TRUE,main="Scree plot wtih parallel analysis")
+scree(corr.matrix)
+
+#Eigen values and vectors are calculated leveraging correlation matrix
+Z<-eigen(corr.matrix)
+Z$val
+Z$vec
+
+#Principal component analysis and factor analysis performed to get a clear interpretation of loadings
+pc1<-principal(corr.matrix,nfactors=3,rotate="none",scores=TRUE)
+pc1
+
+pc2 <- principal(corr.matrix, nfactors = 4, rotate = "none", scores=TRUE)
+pc2
+
+fa1<-fa(pewdf_clean[,-1], nfactors=3, rotate="none", fm="pa")
+fa1
+
+fa2<-fa(pewdf_clean[,-1], nfactors=3, rotate="varimax", fm="pa")
+fa2
+#Clearest interpretation of the loadings was with the varimax rotation.
+fa3<-fa(pewdf_clean[,-1], nfactors=3, rotate="varimax", fm="ml")
+fa3
+
+fa4<-fa(pewdf_clean[,-1], nfactors=3, rotate="none", fm="ml")
+fa4
+
+#MSD
+
+d1 <- dist(pewdf_clean[,-1]) # euclidean distances between the rows
+d1
+fit <- cmdscale(d1, eig=TRUE, k=3) # k is the number of dim
+fit # view results
+
+
+##3D plotting
+x <- fit$points[,1]
+y <- fit$points[,2]
+z <- fit$points[,3]
+install.packages("plot3D")
+library("plot3D")
+
+scatter3D(x,y,z, pch = 10,  theta = 45, phi = 15,
+          main = "Multidimensional Scaling", xlab = "PC1",
+          ylab ="PC2", zlab = "PC3")
